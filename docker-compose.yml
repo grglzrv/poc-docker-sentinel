@@ -1,0 +1,81 @@
+version: '3.5'
+
+services:
+  redis-proxy:
+    image: haproxy:1.9-alpine
+    restart: unless-stopped
+    ports:
+      - 8080:8080/tcp
+      - 6379:6379/tcp
+    volumes:
+      - ./redis-proxy:/usr/local/etc/haproxy:ro
+
+  redis-1:
+    image: redis:5
+    hostname: redis-1
+    restart: unless-stopped
+    environment:
+      - IS_REDIS_MASTER=yes
+
+  redis-2:
+    image: redis:5
+    hostname: redis-2
+    restart: unless-stopped
+    command: redis-server --slaveof redis-master 6379
+    links:
+      - redis-1:redis-master
+
+  redis-3:
+    image: redis:5
+    hostname: redis-3
+    restart: unless-stopped
+    command: redis-server --slaveof redis-master 6379
+    links:
+      - redis-1:redis-master
+
+  sentinel-1:
+    hostname: sentinel-1
+    build: .
+    environment:
+      - SENTINEL_DOWN_AFTER=5000
+      - SENTINEL_FAILOVER=5000
+      - REDIS_MASTER=redis-master
+    links:
+      - redis-1:redis-master
+
+  sentinel-2:
+    hostname: sentinel-2
+    build: .
+    environment:
+      - SENTINEL_DOWN_AFTER=5000
+      - SENTINEL_FAILOVER=5000
+      - REDIS_MASTER=redis-master
+    links:
+      - redis-1:redis-master
+
+  sentinel-3:
+    hostname: sentinel-3
+    build: .
+    environment:
+      - SENTINEL_DOWN_AFTER=5000
+      - SENTINEL_FAILOVER=5000
+      - REDIS_MASTER=redis-master
+    links:
+      - redis-1:redis-master
+
+  rabbit:
+    image: rabbitmq:3.7.9-management
+    restart: unless-stopped
+    ports:
+      - 5672:5672/tcp
+      - 15672:15672/tcp
+
+  celery:
+    build:
+      context: .
+      dockerfile: Dockerfile-celery
+    command: celery worker -A tasks --loglevel=info
+    environment:
+      CELERY_BROKER_URL: 'amqp://guest:guest@rabbit:5672'
+      CELERY_BACKEND_URL: 'sentinel://redis-proxy:6379/0' 
+      CELERY_BACKEND_TRANSPORT_OPTIONS: '{"master_name": "celery_"}'

@@ -1,0 +1,9 @@
+FROM python:3.7-alpine
+
+RUN addgroup user && adduser -S -h /home/user -G user user
+WORKDIR /home/user
+COPY requirements.txt requirements.txt
+COPY tasks.py tasks.py
+RUN pip3 install -r requirements.txt
+USER user
+CMD []
